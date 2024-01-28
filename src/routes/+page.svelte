@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { generatePrivateKey, getPublicKey, nip19, finishEvent, type Event } from 'nostr-tools';
+	import {
+		generatePrivateKey,
+		getPublicKey,
+		nip19,
+		finishEvent,
+		type EventTemplate
+	} from 'nostr-tools';
 	import { get, writable, type Writable } from 'svelte/store';
 	import { JsonView } from '@zerodevx/svelte-json-view';
 	import { SimplePool } from 'nostr-tools';
@@ -8,37 +14,48 @@
 
 	let relays = ['wss://relay.damus.io', 'wss://nos.lol', 'wss://nostr.wine'];
 
-	let privateKey = '';
+	let globalPrivateKey = writable('');
+	let nsec = writable('');
 	let PublicKey = '';
 
 	let hidePrivateKey = true;
-	let globalPrivateKey = writable('');
-	let event: Writable<Event<1>> = writable({
-		kind: 1,
-		content: 'Text Content',
-		tags: [['type', 'review', 'rating']],
-		created_at: 1702644231,
-		pubkey: '525f8a81277e28ddb6f8bab0ceba8656f07c584730e74931a2942b4ad2590939',
-		id: 'b4ee7f64b6a8f26151d27c803d3de07c7c6bd40d6a69ee65f0e47fc14c80d822',
-		sig: ''
-	});
 
-	let eventText = JSON.stringify($event);
+	// nostr event data
+	let kind = 1;
+	let content = 'Text Content';
+	let tags = [['p', 'HEX KEY', 'wss://alice.relay.com/', 'alice']];
 
-	$: {
-		event.set(JSON.parse(eventText));
+	function addTag() {
+		tags = [...tags, ['p', 'HEX KEY', 'wss://bob.relay.com/', 'bob']];
 	}
 
+	function removeTag(index: number) {
+		tags = [...tags.slice(0, index), ...tags.slice(index + 1)];
+	}
+
+	function updateTag(
+		index: number,
+		event: Event & { currentTarget: EventTarget & HTMLInputElement }
+	) {
+		tags = [...tags];
+		tags[index] = event.currentTarget.value.split(',').map((str) => str.trim());
+	}
+
+	let signedEvent = {};
 	let metaData: any = {};
 
-	// const { subscribe, set } = writable('Enokas is the king');
-	// console.log(get({ subscribe }));
-
 	$: {
-		if (privateKey.length > 62) {
-			const key = checkNSEC(privateKey);
-			if (key) {
-				PublicKey = getPublicKey(key);
+		if ($globalPrivateKey.length > 62) {
+			// Set nsec
+			nsec.set($globalPrivateKey);
+			const hexKey = checkNSEC($globalPrivateKey);
+			console.log(hexKey);
+			if (hexKey) {
+				PublicKey = getPublicKey(hexKey);
+			}
+			// Set the global private key to Hex
+			if (hexKey) {
+				$globalPrivateKey = hexKey;
 			}
 		}
 	}
@@ -69,11 +86,10 @@
 	}
 
 	function Nip07GetPubkey() {
-		if (typeof window !== 'undefined' && window['nostr']) {
-			window['nostr'].getPublicKey().then((res) => {
-				privateKey = '';
+		if (typeof window !== 'undefined' && window.nostr) {
+			window.nostr.getPublicKey().then((res) => {
+				$globalPrivateKey = '';
 				PublicKey = res;
-				$event.pubkey = res;
 			});
 		}
 	}
@@ -101,27 +117,38 @@
 		metaData = data;
 	}
 
-	function getSignedEvent(event: any, nip07 = true) {
+	function signEvent(nip07 = true) {
+		console.log($globalPrivateKey);
+
+		signedEvent = {};
+		let unsignedEvent: EventTemplate = {
+			kind,
+			content,
+			tags,
+			created_at: Math.floor(new Date().getTime() / 1000)
+		};
+
 		if (nip07) {
-			if (typeof window !== 'undefined' && window['nostr']) {
-				window['nostr'].signEvent(event).then((res) => {
+			if (typeof window !== 'undefined' && window.nostr) {
+				window['nostr'].signEvent(unsignedEvent).then((res) => {
 					console.log(res);
 					signedEvent = res;
 				});
 			}
 		} else {
-			signedEvent = finishEvent(event, $globalPrivateKey);
+			if ($globalPrivateKey.length < 63) {
+				return;
+			}
+			signedEvent = finishEvent(unsignedEvent, $globalPrivateKey);
 		}
 	}
-
-	let signedEvent = {};
 </script>
 
 <div class="p-4 w-full">
 	<span class="text-3xl"> Nostr - Test Tools </span>
 	<span class="divider" />
 	<div class="flex flex-row gap-2 items-center">
-		<span>Global Private Key</span>
+		<span>Private Key</span>
 		{#if hidePrivateKey}
 			<input
 				type="password"
@@ -142,26 +169,27 @@
 		<button class="btn btn-square w-44" on:click={() => (hidePrivateKey = !hidePrivateKey)}>
 			Hide/Show Private key
 		</button>
+		<span>Hex PubKey</span>
 		<input type="text" class="input input-bordered" bind:value={PublicKey} />
 	</div>
 	<span class="divider" />
-	<div class="flex flex-wrap p-4 gap-4">
-		<div class="flex flex-col gap-2 md:w-4/12 border-2 p-4">
-			<span class="text-lg font-medium">Get PublicKey</span>
+	<div class="flex flex-wrap p-4 gap-4 justify-center">
+		<div class="flex flex-col gap-2 md:w-4/12 border-2 border-secondary p-4">
+			<span class="text-lg font-medium">Get PubKey</span>
 			<hr />
 
 			<div class="flex flex-wrap items-center w-full gap-2">
 				<span class="w-full">Private Key</span>
 				<input
 					type="password"
-					bind:value={privateKey}
-					class="grow border w-full border-gray-400 h-14 rounded-md p-2"
+					bind:value={$globalPrivateKey}
+					class="grow input input-bordered p-2"
 					placeholder="Private Key (nsec or hex)"
 				/>
 				<button
 					class="btn"
 					on:click={() => {
-						privateKey = generatePrivateKey();
+						$globalPrivateKey = generatePrivateKey();
 					}}
 				>
 					New
@@ -169,36 +197,45 @@
 
 				<button
 					class="btn"
-					class:btn-disabled={privateKey.length < 63}
+					class:btn-disabled={$globalPrivateKey.length < 63}
 					on:click={() => {
-						navigator.clipboard.writeText(privateKey);
+						navigator.clipboard.writeText($globalPrivateKey);
 					}}
 				>
 					Copy
 				</button>
-				<button
-					class="btn"
-					class:btn-disabled={$globalPrivateKey.length < 63}
-					on:click={() => {
-						privateKey = $globalPrivateKey;
-					}}
-				>
-					Global Key
-				</button>
 			</div>
 			<span class="divider">or</span>
-			<button class="btn btn-primary w-full" on:click={Nip07GetPubkey}>Get With Nip07</button>
+			<button class="btn btn-primary w-full" on:click={Nip07GetPubkey}>Get With NIP07</button>
 			<span class="text-lg break-all font-mono">
-				Result: <b class="text-success font-normal">{PublicKey}</b><br />
-				NPUB: {nip19.npubEncode(PublicKey)}
+				HEX: <b class="text-success font-normal">{PublicKey}</b><br />
+				NPUB: {PublicKey.length > 0 ? nip19.npubEncode(PublicKey) : ''}
 			</span>
 		</div>
-		<div class="flex flex-col gap-2 md:w-6/12 border-2 p-4">
+		<div class="flex flex-col gap-2 md:w-7/12 border-2 border-secondary p-4">
 			<span class="text-lg font-medium">Sign Event</span>
-			<textarea bind:value={eventText} class="input input-bordered h-32 p-2"></textarea>
+			<input type="number" class="input input-bordered" bind:value={kind} />
+			<textarea bind:value={content} class="input input-bordered h-32 p-2"></textarea>
+			{#each tags as tag, index (index)}
+				<div class="flex flex-wrap items-center w-full gap-2">
+					<input
+						type="text"
+						bind:value={tag}
+						on:input={(event) => updateTag(index, event)}
+						class="grow input input-bordered"
+					/>
+					<button class="btn" on:click={() => removeTag(index)}>Remove</button>
+				</div>
+			{/each}
+			<button class="btn btn-secondary" on:click={addTag}>Add Tag</button>
+			<button class="btn btn-primary w-full" on:click={() => signEvent(true)}
+				>Sign Event with Extension (NIP07)</button
+			>
 			<span class="divider">or</span>
-			<button class="btn btn-primary w-full" on:click={() => getSignedEvent($event, true)}
-				>SignEvent</button
+			<button
+				class="btn btn-primary w-full"
+				disabled={$globalPrivateKey.length < 63}
+				on:click={() => signEvent(false)}>Sign Event with PrivateKey</button
 			>
 			<span class="text-lg break-all font-mono"> Result:</span>
 			<span class="mockup-code break-all overflow-hidden w-full"
@@ -211,7 +248,7 @@
 				Copy
 			</button>
 		</div>
-		<div class="flex flex-col gap-2 md:w-6/12 border-2 p-4">
+		<div class="flex flex-col gap-2 md:w-8/12 border-2 border-secondary p-4">
 			<span class="text-lg font-medium">Get MetaData</span>
 			<button class="btn btn-primary w-full" on:click={() => getMetaDataProfile()}
 				>Get Profile Information</button

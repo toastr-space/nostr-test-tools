@@ -1,11 +1,10 @@
 export default {
-	content: ["./src/**/*.{html,js,svelte,ts}"],
+	content: ['./src/**/*.{html,js,svelte,ts}'],
 	theme: {
-		extend: {},
+		extend: {}
 	},
-	plugins: [require("daisyui"), require("@tailwindcss/typography")],
+	plugins: [require('daisyui'), require('@tailwindcss/typography')],
 	daisyui: {
-		themes: ["light", "dark", "cupcake", "dracula", "cmyk", "bumblebee"],
-	},
-}
-
+		themes: ['light', 'dark', 'synthwave', 'dracula', 'cmyk', 'bumblebee']
+	}
+};
