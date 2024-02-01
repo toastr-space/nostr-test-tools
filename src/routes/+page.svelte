@@ -213,8 +213,13 @@
 			</span>
 		</div>
 		<div class="flex flex-col gap-2 md:w-7/12 border-2 border-secondary p-4">
-			<span class="text-lg font-medium">Sign Event</span>
-			<input type="number" class="input input-bordered" bind:value={kind} />
+			<span class="text-lg font-medium">Create and Sign Event</span>
+			
+			<label for="inputfield" class="block text-sm font-medium text-gray-700">Kind</label>
+			<input id="inputfield" type="number" class="input input-bordered" bind:value={kind} />
+
+			
+			<label for="inputfield" class="block text-sm font-medium text-gray-700">Content</label>
 			<textarea bind:value={content} class="input input-bordered h-32 p-2"></textarea>
 			{#each tags as tag, index (index)}
 				<div class="flex flex-wrap items-center w-full gap-2">
@@ -227,6 +232,8 @@
 					<button class="btn" on:click={() => removeTag(index)}>Remove</button>
 				</div>
 			{/each}
+
+			<label for="inputfield" class="block text-sm font-medium text-gray-700">Tags</label>
 			<button class="btn btn-secondary" on:click={addTag}>Add Tag</button>
 			<button class="btn btn-primary w-full" on:click={() => signEvent(true)}
 				>Sign Event with Extension (NIP07)</button
